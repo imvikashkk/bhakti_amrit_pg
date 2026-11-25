@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import Icon from '../Icon';
 
-// Lifetime plan: wipes the 40 days' progress, so it asks first.
+// Plans that allow repeating: wipes the 40 days' progress, so it asks first.
 export default function RestartButton() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);

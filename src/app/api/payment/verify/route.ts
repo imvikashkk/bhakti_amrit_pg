@@ -41,10 +41,9 @@ export async function POST(req: NextRequest) {
     `UPDATE payments SET razorpay_payment_id=$1, razorpay_signature=$2, status='success' WHERE id=$3`,
     [razorpay_payment_id, razorpay_signature, payment.id]
   );
-  // Always granted, even if a webhook marked this payment successful first: that webhook may be the
-  // old app's, which doesn't grant the plan here. Whichever call really grants it sends the SMS.
+  // The webhook may have got here first. Whichever call really grants the plan sends the SMS.
   if (isValidPlan(payment.plan)) {
-    if (await grantSubscription(session.userId, payment.plan)) await notifyPurchase(session.userId);
+    if (await grantSubscription(session.userId, payment.plan, payment.id)) await notifyPurchase(session.userId);
   } else console.error('Payment for unknown plan', payment.plan, payment.id);
 
   return NextResponse.json({ success: true });

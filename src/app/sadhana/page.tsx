@@ -155,7 +155,7 @@ function PlanCard({ state }: { state: SadhanaState }) {
   const expires = sub.expires_at
     ? new Date(sub.expires_at).toLocaleDateString('hi-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
     : null;
-  const canUpgrade = PLAN_ORDER.some((p) => canPurchase(p, sub));
+  const canUpgrade = PLAN_ORDER.some((p) => canPurchase(p, sub, state.status.fullyComplete));
   return (
     <GoldCard>
       <div className="flex flex-wrap items-center justify-between gap-3">

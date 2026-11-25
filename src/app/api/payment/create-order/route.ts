@@ -3,7 +3,8 @@ import { getSession } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { migrate } from '@/lib/migrate';
 import { getRazorpay } from '@/lib/razorpay';
-import { canPurchase, isValidPlan, PRODUCT, purchasePricePaise } from '@/lib/sadhana';
+import { canPurchase, isValidPlan, PRODUCT, purchasePricePaise, SADHANA_DAYS } from '@/lib/sadhana';
+import { getProgress } from '@/lib/sadhana-state';
 import { getSubscription } from '@/lib/subscriptions';
 
 export async function POST(req: NextRequest) {
@@ -15,10 +16,11 @@ export async function POST(req: NextRequest) {
 
   await migrate();
   const sub = await getSubscription(session.userId);
-  if (!canPurchase(planId, sub)) {
+  const finished = (await getProgress(session.userId)).length >= SADHANA_DAYS;
+  if (!canPurchase(planId, sub, finished)) {
     return NextResponse.json({ error: 'यह प्लान आपके लिए उपलब्ध नहीं है' }, { status: 409 });
   }
-  const amount = purchasePricePaise(planId, sub);
+  const amount = purchasePricePaise(planId, sub, finished);
 
   try {
     const order = await getRazorpay().orders.create({

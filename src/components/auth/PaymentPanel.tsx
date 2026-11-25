@@ -24,12 +24,21 @@ const TICKETS: Partial<
     }
   >
 > = {
-  lifetime: {
-    big: '∞',
-    unit: 'जीवनभर',
-    small: 'हमेशा के लिए',
-    title: 'जीवनभर साधना',
-    line: 'एक बार लें, जितनी बार चाहें दोहराएं',
+  months3: {
+    big: '3',
+    unit: 'महीने',
+    small: '90 दिन',
+    title: '3 महीने एक्सेस',
+    line: '3 महीने तक जितनी बार चाहें दोहराएं',
+    days: 90,
+  },
+  months6: {
+    big: '6',
+    unit: 'महीने',
+    small: '180 दिन',
+    title: '6 महीने एक्सेस',
+    line: '6 महीने तक जितनी बार चाहें दोहराएं',
+    days: 180,
   },
   yearly: {
     big: '365',
@@ -192,15 +201,11 @@ export default function PaymentPanel({
             on={p.id === selected}
             onSelect={() => setSelected(p.id)}
             ribbon={
-              p.id === 'lifetime'
-                ? '★ सर्वश्रेष्ठ'
-                : p.id === 'yearly' && plans.length > 1
-                  ? 'हमारा सुझाव'
-                  : undefined
+              p.id === 'yearly' && plans.length > 1 ? 'हमारा सुझाव' : undefined
             }
             note={
               p.id === 'yearly' && yearlyExtra > 0
-                ? `365 दिन के लिए दीपावली विशेष मूल्य — 40 दिन वाले से बस ₹${yearlyExtra} ज़्यादा`
+                ? `365 दिन के लिए, 40 दिन वाले से बस ₹${yearlyExtra} ज़्यादा`
                 : undefined
             }
           />
@@ -281,13 +286,11 @@ function PlanTicket({
   if (!t) return null;
   const rupees = plan.pricePaise / 100;
   const credited = plan.pricePaise !== plan.fullPricePaise;
-  const best = plan.id === 'lifetime';
+  const best = plan.id === 'yearly';
   const perDay =
     t.days && !credited
       ? `₹${Math.round((rupees / t.days) * 10) / 10}/दिन`
-      : best
-        ? 'एक बार, बस'
-        : null;
+      : null;
   const notch =
     'absolute left-[5.75rem] z-10 h-4 w-4 -translate-x-1/2 rounded-full border bg-[var(--background)] sm:left-[7.5rem]';
   const notchBorder = on
@@ -321,7 +324,7 @@ function PlanTicket({
         }`}
       >
         <span
-          className={`font-display leading-none ${best ? 'text-5xl' : 'text-4xl sm:text-5xl'}`}
+          className="font-display text-4xl leading-none sm:text-5xl"
         >
           {t.big}
         </span>

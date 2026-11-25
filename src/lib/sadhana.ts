@@ -7,7 +7,7 @@ export const SADHANA_DAYS = 40;
 // A new day opens this long after the previous one was completed.
 export const COOLDOWN_HOURS = 12;
 
-export type PlanId = 'trial' | 'full' | 'yearly' | 'lifetime';
+export type PlanId = 'trial' | 'full' | 'months3' | 'months6' | 'yearly' | 'lifetime';
 
 export interface Plan {
   id: PlanId;
@@ -26,13 +26,18 @@ export interface Plan {
 export const PLANS: Record<PlanId, Plan> = {
   // Retired — kept so existing trial users still rank correctly.
   trial: { id: 'trial', label: '3-दिन ट्रायल', tagline: 'पहले 3 दिन आज़माएं', pricePaise: 1100, durationDays: null, dayLimit: 3, canRestart: false },
-  full: { id: 'full', label: '40-दिन साधना', tagline: 'पूरी 40 दिन की साधना, एक बार', pricePaise: 37900, durationDays: null, dayLimit: SADHANA_DAYS, canRestart: false },
-  yearly: { id: 'yearly', label: '1 साल एक्सेस', tagline: '1 साल तक, जितनी बार चाहें दोहराएं', pricePaise: 48900, durationDays: 365, dayLimit: SADHANA_DAYS, canRestart: true },
+  full: { id: 'full', label: '40-दिन साधना', tagline: 'पूरी 40 दिन की साधना, एक बार', pricePaise: 16900, durationDays: null, dayLimit: SADHANA_DAYS, canRestart: false },
+  months3: { id: 'months3', label: '3 महीने एक्सेस', tagline: '3 महीने तक, जितनी बार चाहें दोहराएं', pricePaise: 19900, durationDays: 90, dayLimit: SADHANA_DAYS, canRestart: true },
+  months6: { id: 'months6', label: '6 महीने एक्सेस', tagline: '6 महीने तक, जितनी बार चाहें दोहराएं', pricePaise: 29900, durationDays: 180, dayLimit: SADHANA_DAYS, canRestart: true },
+  yearly: { id: 'yearly', label: '1 साल एक्सेस', tagline: '1 साल तक, जितनी बार चाहें दोहराएं', pricePaise: 39900, durationDays: 365, dayLimit: SADHANA_DAYS, canRestart: true },
+  // No longer sold — kept so anyone who has it keeps it.
   lifetime: { id: 'lifetime', label: 'Lifetime', tagline: 'जीवनभर पहुंच + जितनी बार चाहें दोहराएं', pricePaise: 89900, durationDays: null, dayLimit: SADHANA_DAYS, canRestart: true },
 };
 
 // Purchasable plans, lowest to highest rank.
-export const PLAN_ORDER: PlanId[] = ['full', 'yearly', 'lifetime'];
+export const PLAN_ORDER: PlanId[] = ['full', 'months3', 'months6', 'yearly'];
+// Lowest to highest, including plans no longer sold, so a retired plan is never replaced by a lower one.
+const PLAN_RANK: PlanId[] = [...PLAN_ORDER, 'lifetime'];
 export const DEFAULT_PLAN: PlanId = 'yearly';
 
 export interface Subscription {
@@ -45,25 +50,30 @@ export function isValidPlan(id: unknown): id is PlanId {
 }
 
 export function planRank(id: PlanId | null | undefined): number {
-  return id ? PLAN_ORDER.indexOf(id) : -1;
+  return id ? PLAN_RANK.indexOf(id) : -1;
 }
 
 export function isPlanExpired(expiresAt: string | Date | null | undefined): boolean {
   return !!expiresAt && new Date(expiresAt).getTime() < Date.now();
 }
 
-// Higher-ranked plans are upgrades; the same plan is a renewal only once expired.
-// 'full' → 'yearly' is blocked: full never expires, so it would trade permanent access for 365 days.
-export function canPurchase(target: PlanId, sub: Subscription | null): boolean {
+// Once a plan has expired any plan can be bought; until then only a higher-ranked one, as an upgrade.
+// 'full' never expires, so a time-limited plan would trade permanent access for a few months: those
+// open up once its 40 days are finished (`finished`).
+export function canPurchase(target: PlanId, sub: Subscription | null, finished: boolean): boolean {
   if (!PLAN_ORDER.includes(target)) return false;
-  if (sub?.plan === 'full' && target === 'yearly') return false;
-  return planRank(target) > planRank(sub?.plan) || (target === sub?.plan && isPlanExpired(sub.expires_at));
+  // Nothing left to do on a plan that can't be repeated.
+  if (finished && !PLANS[target].canRestart) return false;
+  if (!sub || isPlanExpired(sub.expires_at)) return true;
+  if (sub.plan === 'full' && PLANS[target].durationDays !== null && !finished) return false;
+  return planRank(target) > planRank(sub.plan);
 }
 
-// Upgrade credit (the current plan's price) only applies while the current plan is still active.
-export function purchasePricePaise(target: PlanId, sub: Subscription | null): number {
+// Upgrade credit (the current plan's price) only applies while the current plan still has something
+// left to give: not once it has expired, nor once the 40-day plan has been finished.
+export function purchasePricePaise(target: PlanId, sub: Subscription | null, finished: boolean): number {
   const price = PLANS[target].pricePaise;
-  if (!sub || isPlanExpired(sub.expires_at)) return price;
+  if (!sub || isPlanExpired(sub.expires_at) || (sub.plan === 'full' && finished)) return price;
   // Razorpay's minimum is ₹1, and a credit must never push an order below it.
   return Math.max(price - (PLANS[sub.plan]?.pricePaise ?? 0), 100);
 }

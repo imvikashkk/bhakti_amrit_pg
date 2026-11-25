@@ -145,6 +145,18 @@ async function runMigrations() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sadhana_completed_at TIMESTAMP`);
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS users_sadhak_code_idx ON users (sadhak_code)`);
 
+  // When a payment gave its plan. Payments from before this column that were already covered by a
+  // subscription are marked once, as the column is added.
+  await query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'payments'::regclass AND attname = 'applied_at' AND NOT attisdropped) THEN
+        ALTER TABLE payments ADD COLUMN applied_at TIMESTAMP;
+        UPDATE payments p SET applied_at = p.created_at FROM user_subscriptions s
+        WHERE p.status = 'success' AND s.user_id = p.user_id AND s.product = p.product AND p.created_at <= s.updated_at;
+      END IF;
+    END $$
+  `);
+
   // ── Payment gateway for our other websites (src/lib/gateway.ts) ──
   await query(`
     CREATE TABLE IF NOT EXISTS gateway_sites (

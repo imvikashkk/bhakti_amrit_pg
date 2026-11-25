@@ -7,7 +7,7 @@ import { getProgress } from '@/lib/sadhana-state';
 import { getSubscription } from '@/lib/subscriptions';
 import { isTester } from '@/lib/testers';
 
-// Lifetime plan only: start the 40 days over once they are finished.
+// Plans that allow it (canRestart): start the 40 days over once they are finished.
 export async function POST() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'कृपया पहले Login करें' }, { status: 401 });
@@ -15,7 +15,7 @@ export async function POST() {
   await migrate();
   const sub = await getSubscription(session.userId);
   const allowed = isTester(session.phone) || (hasActiveAccess(sub) && !!sub && PLANS[sub.plan]?.canRestart);
-  if (!allowed) return NextResponse.json({ error: 'यह सुविधा सिर्फ Lifetime प्लान में है' }, { status: 403 });
+  if (!allowed) return NextResponse.json({ error: 'यह सुविधा आपके प्लान में नहीं है' }, { status: 403 });
 
   if ((await getProgress(session.userId)).length < SADHANA_DAYS) {
     return NextResponse.json({ error: 'साधना पूरी होने के बाद ही दोबारा शुरू कर सकते हैं' }, { status: 403 });

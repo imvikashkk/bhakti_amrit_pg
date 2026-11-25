@@ -2,23 +2,21 @@ import { query } from './db';
 import { isValidPlan, PLANS, PRODUCT, planRankSqlCase, type PlanId, type Subscription } from './sadhana';
 import { sendPurchaseSms } from './sms';
 
-// The old app shares this database and its webhook can record a payment as successful without
-// granting the plan here. A sadhak must never have paid and be asked to pay again, so a successful
-// payment newer than their subscription is granted the moment anything looks them up.
-async function grantUnappliedPayment(userId: number) {
-  const rows = await query<{ plan: string }>(
-    `SELECT p.plan FROM payments p
-     LEFT JOIN user_subscriptions s ON s.user_id = p.user_id AND s.product = p.product
-     WHERE p.user_id = $1 AND p.product = $2 AND p.status = 'success' AND (s.id IS NULL OR p.created_at > s.updated_at)
-     ORDER BY ${planRankSqlCase('p.plan')} DESC, p.created_at DESC LIMIT 1`,
+// A sadhak must never have paid and be asked to pay again, so a successful payment that hasn't given
+// its plan yet (the server stopped halfway, say) gives it the moment anything looks them up.
+async function grantUnappliedPayments(userId: number) {
+  const rows = await query<{ id: number; plan: string }>(
+    `SELECT id, plan FROM payments WHERE user_id = $1 AND product = $2 AND status = 'success' AND applied_at IS NULL
+     ORDER BY ${planRankSqlCase('plan')} DESC, created_at DESC`,
     [userId, PRODUCT]
   );
-  const plan = rows[0]?.plan;
-  if (isValidPlan(plan) && (await grantSubscription(userId, plan))) await notifyPurchase(userId);
+  for (const { id, plan } of rows) {
+    if (isValidPlan(plan) && (await grantSubscription(userId, plan, id))) await notifyPurchase(userId);
+  }
 }
 
 export async function getSubscription(userId: number): Promise<Subscription | null> {
-  await grantUnappliedPayment(userId);
+  await grantUnappliedPayments(userId);
   const rows = await query<Subscription>(
     `SELECT plan, expires_at FROM user_subscriptions WHERE user_id=$1 AND product=$2`,
     [userId, PRODUCT]
@@ -26,24 +24,27 @@ export async function getSubscription(userId: number): Promise<Subscription | nu
   return rows[0] ?? null;
 }
 
-// Grants `plan` after a successful payment. Never downgrades: if the user already
-// upgraded via another order in the meantime, the higher plan is kept. The last
-// clause allows renewing the same plan once it has already expired. Safe to call repeatedly: it
-// returns whether anything changed, which is what decides that a purchase SMS is due.
-export async function grantSubscription(userId: number, plan: PlanId): Promise<boolean> {
+// Grants `plan` after a successful payment. A payment gives its plan once only, so replaying an old
+// one can't renew anything. Never downgrades an active plan: if the user already upgraded via another
+// order in the meantime, the higher plan is kept. Safe to call repeatedly: it returns whether anything
+// changed, which is what decides that a purchase SMS is due.
+export async function grantSubscription(userId: number, plan: PlanId, paymentId: number): Promise<boolean> {
   const durationDays = PLANS[plan]?.durationDays ?? null;
   const expiresAt = durationDays ? new Date(Date.now() + durationDays * 86400000) : null;
 
+  // One statement, so the payment is never marked as used without the plan being given.
   const granted = await query(
-    `INSERT INTO user_subscriptions (user_id, product, plan, expires_at) VALUES ($1, $2, $3, $4)
+    `WITH claimed AS (
+       UPDATE payments SET applied_at = NOW() WHERE id = $5 AND user_id = $1 AND applied_at IS NULL RETURNING id
+     )
+     INSERT INTO user_subscriptions (user_id, product, plan, expires_at)
+     SELECT $1::int, $2::varchar, $3::varchar, $4::timestamp FROM claimed
      ON CONFLICT (user_id, product) DO UPDATE
        SET plan=EXCLUDED.plan, expires_at=EXCLUDED.expires_at, updated_at=NOW()
      WHERE ${planRankSqlCase('user_subscriptions.plan')} < ${planRankSqlCase('EXCLUDED.plan')}
-        OR (user_subscriptions.plan = EXCLUDED.plan
-            AND user_subscriptions.expires_at IS NOT NULL
-            AND user_subscriptions.expires_at < NOW())
+        OR (user_subscriptions.expires_at IS NOT NULL AND user_subscriptions.expires_at < NOW())
      RETURNING id`,
-    [userId, PRODUCT, plan, expiresAt]
+    [userId, PRODUCT, plan, expiresAt, paymentId]
   );
   // "Has ever paid" flag — signup uses it to send paid users to OTP login instead.
   await query(`UPDATE users SET is_paid=TRUE WHERE id=$1`, [userId]);

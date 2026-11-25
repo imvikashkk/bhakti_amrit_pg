@@ -32,8 +32,8 @@ export default async function PaymentPage() {
   // Only counts and the next day are read from this, which don't depend on the time.
   const status = getDayStatus(await getProgress(session.userId), sub, false, 0);
 
-  const available = PLAN_ORDER.filter((p) => canPurchase(p, sub));
-  const plans = available.map((id) => ({ ...PLANS[id], pricePaise: purchasePricePaise(id, sub), fullPricePaise: PLANS[id].pricePaise }));
+  const available = PLAN_ORDER.filter((p) => canPurchase(p, sub, status.fullyComplete));
+  const plans = available.map((id) => ({ ...PLANS[id], pricePaise: purchasePricePaise(id, sub, status.fullyComplete), fullPricePaise: PLANS[id].pricePaise }));
 
   return (
     <DarshanShell
