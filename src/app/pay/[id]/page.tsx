@@ -27,7 +27,13 @@ function Message({ text, backUrl }: { text: string; backUrl?: string }) {
   );
 }
 
-export default async function PayPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PayPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ failed?: string }>;
+}) {
   await migrate();
   const session = await getGatewaySession((await params).id);
   const site = session && (await getSite(session.site_id));
@@ -43,6 +49,8 @@ export default async function PayPage({ params }: { params: Promise<{ id: string
       amountPaise={session.amount}
       customer={{ name: session.customer_name, phone: session.customer_phone, email: session.customer_email }}
       cancelUrl={cancelUrl}
+      hosted={process.env.RAZORPAY_HOSTED_CHECKOUT === '1'}
+      failed={(await searchParams).failed === '1'}
     />
   );
 }

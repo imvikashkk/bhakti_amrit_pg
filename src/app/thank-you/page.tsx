@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import AuthShell, { AuthCard } from '@/components/auth/AuthShell';
+import PurchaseTracker from '@/components/checkout/PurchaseTracker';
 import Icon from '@/components/Icon';
 import { whatsappLink } from '@/data/site';
 import { isValidPlan, PLANS } from '@/lib/sadhana';
@@ -10,8 +11,8 @@ export const metadata: Metadata = {
   robots: { index: false },
 };
 
-export default async function ThankYouPage({ searchParams }: { searchParams: Promise<{ txn?: string; plan?: string }> }) {
-  const { txn, plan } = await searchParams;
+export default async function ThankYouPage({ searchParams }: { searchParams: Promise<{ txn?: string; plan?: string; track?: string; value?: string }> }) {
+  const { txn, plan, track, value } = await searchParams;
 
   return (
     <AuthShell
@@ -24,6 +25,8 @@ export default async function ThankYouPage({ searchParams }: { searchParams: Pro
       }
       sub="आपकी साधना सक्रिय हो गई है। हनुमान जी की कृपा आप पर सदा बनी रहे।"
     >
+      {/* Only set by the hosted-checkout return (api/payment/return) */}
+      {track === '1' && txn && <PurchaseTracker txn={txn} value={Number(value)} />}
       <AuthCard>
         <div className="text-center">
           <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-ember text-3xl text-[var(--primary-foreground)] shadow-glow">

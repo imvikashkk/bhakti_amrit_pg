@@ -18,11 +18,15 @@ export const metadata: Metadata = {
   robots: { index: false },
 };
 
-export default async function CheckoutPage({ searchParams }: { searchParams: Promise<{ plan?: string | string[] }> }) {
+export default async function CheckoutPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ plan?: string | string[]; state?: string }>;
+}) {
   const session = await getSession();
   if (!session) redirect('/signup');
 
-  const { plan } = await searchParams;
+  const { plan, state } = await searchParams;
   if (!isValidPlan(plan)) redirect('/payment');
 
   await migrate();
@@ -32,5 +36,17 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
   const finished = (await getProgress(session.userId)).length >= SADHANA_DAYS;
   if (!canPurchase(plan, sub, finished)) redirect('/payment');
 
-  return <CheckoutPanel user={users[0]} planId={plan} pricePaise={purchasePricePaise(plan, sub, finished)} />;
+  // Back from Razorpay's hosted page without paying: wait for the buyer instead of sending them straight back
+  const notice =
+    state === 'failed' ? 'Payment नहीं हो पाया, कृपया फिर कोशिश करें' : state === 'cancelled' ? 'Payment पूरा नहीं हुआ' : undefined;
+
+  return (
+    <CheckoutPanel
+      user={users[0]}
+      planId={plan}
+      pricePaise={purchasePricePaise(plan, sub, finished)}
+      hosted={process.env.RAZORPAY_HOSTED_CHECKOUT === '1'}
+      notice={notice}
+    />
+  );
 }
